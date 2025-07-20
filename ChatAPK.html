@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Group Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom scrollbar */
+        .chat-messages::-webkit-scrollbar {
+            width: 8px;
+        }
+        .chat-messages::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+        .chat-messages::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+        
+        /* Message animation */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .message {
+            animation: fadeIn 0.3s ease-out;
+        }
+        
+        /* Online status indicator */
+        .online-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            background-color: #4ade80;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 h-screen">
+    <div id="auth-screen" class="fixed inset-0 flex items-center justify-center bg-gray-900 bg-opacity-75 z-50 transition-opacity duration-300">
+        <div class="bg-white rounded-lg shadow-xl p-8 w-full max-w-md">
+            <h1 class="text-2xl font-bold text-gray-800 mb-6">Join Secure Chat</h1>
+            <div class="mb-4">
+                <label for="username" class="block text-gray-700 text-sm font-medium mb-2">Username</label>
+                <input type="text" id="username" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter unique username">
+                <p id="username-error" class="text-red-500 text-xs mt-1 hidden">Username is already taken</p>
+            </div>
+            <div class="mb-6">
+                <label for="secret-code" class="block text-gray-700 text-sm font-medium mb-2">Secret Code</label>
+                <input type="password" id="secret-code" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter secret code">
+                <p id="code-error" class="text-red-500 text-xs mt-1 hidden">Incorrect secret code</p>
+            </div>
+            <button id="join-chat" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">
+                Join Chat
+            </button>
+        </div>
+    </div>
+
+    <div id="chat-container" class="hidden h-full">
+        <div class="flex flex-col h-full">
+            <!-- Header -->
+            <div class="bg-white shadow-sm p-4 flex justify-between items-center">
+                <div class="flex items-center">
+                    <div id="user-indicator" class="online-indicator"></div>
+                    <h1 class="text-xl font-bold text-gray-800">Secure Group Chat</h1>
+                </div>
+                <button id="leave-chat" class="text-gray-600 hover:text-gray-900">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Active users -->
+            <div id="active-users" class="bg-gray-50 p-3 overflow-x-auto whitespace-nowrap border-b flex gap-3">
+                <!-- Active users will be added here dynamically -->
+            </div>
+
+            <!-- Chat messages -->
+            <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4">
+                <!-- Messages will be added here dynamically -->
+                <div class="text-center text-gray-500 py-8 space-y-2">
+                    <p class="text-lg font-medium">Welcome to Secure Chat!</p>
+                    <p class="text-sm">Messages and images will disappear when you close the app</p>
+                    <div class="text-xs mt-4 text-gray-400">
+                        Secret Code: ${SECRET_CODE}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Message input -->
+            <div class="bg-white p-4 border-t border-gray-200">
+                <div class="flex gap-2">
+                    <div class="relative flex-1">
+                        <input type="text" id="message-input" placeholder="Type your message..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <div class="absolute right-2 top-1/2 transform -translate-y-1/2 flex gap-1">
+                            <button id="toggle-image-upload" class="text-gray-500 hover:text-blue-600 focus:outline-none">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <button id="send-message" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                        </svg>
+                    </button>
+                </div>
+                <div id="image-upload-container" class="mt-3 hidden">
+                    <div class="bg-gray-100 rounded-lg p-3 flex justify-between items-center">
+                        <div class="flex-1">
+                            <p class="text-sm text-gray-600">Upload an image (JPG, PNG)</p>
+                            <input type="file" id="image-upload" accept="image/*" class="hidden">
+                            <input type="text" id="image-caption" placeholder="Add a caption..." class="mt-2 w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        </div>
+                        <button id="cancel-image-upload" class="ml-4 text-red-500 hover:text-red-700">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Shared variables
+        const SECRET_CODE = "4593647715";
+        let socket;
+        let currentUser = null;
+        let users = {};
+        let chatMessages = [];
+
+        // DOM elements
+        const authScreen = document.getElementById('auth-screen');
+        const chatContainer = document.getElementById('chat-container');
+        const usernameInput = document.getElementById('username');
+        const secretCodeInput = document.getElementById('secret-code');
+        const joinChatBtn = document.getElementById('join-chat');
+        const usernameError = document.getElementById('username-error');
+        const codeError = document.getElementById('code-error');
+        const leaveChatBtn = document.getElementById('leave-chat');
+        const activeUsersContainer = document.getElementById('active-users');
+        const chatMessagesContainer = document.getElementById('chat-messages');
+        const messageInput = document.getElementById('message-input');
+        const sendMessageBtn = document.getElementById('send-message');
+        const toggleImageUploadBtn = document.getElementById('toggle-image-upload');
+        const imageUploadContainer = document.getElementById('image-upload-container');
+        const imageUploadInput = document.getElementById('image-upload');
+        const imageCaptionInput = document.getElementById('image-caption');
+        const cancelImageUploadBtn = document.getElementById('cancel-image-upload');
+        const userIndicator = document.getElementById('user-indicator');
+
+        // Initialize the chat app
+        function init() {
+            setupEventListeners();
+        }
+
+        // Set up all event listeners
+        function setupEventListeners() {
+            // Authentication
+            joinChatBtn.addEventListener('click', handleJoinChat);
+            leaveChatBtn.addEventListener('click', handleLeaveChat);
+            
+            // Message sending
+            messageInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') sendMessage();
+            });
+            sendMessageBtn.addEventListener('click', sendMessage);
+            
+            // Image upload
+            toggleImageUploadBtn.addEventListener('click', () => {
+                imageUploadContainer.classList.toggle('hidden');
+                if (!imageUploadContainer.classList.contains('hidden')) {
+                    setTimeout(() => {
+                        imageUploadInput.click();
+                    }, 100);
+                }
+            });
+            
+            imageUploadInput.addEventListener('change', handleImageUpload);
+            cancelImageUploadBtn.addEventListener('click', () => {
+                imageUploadContainer.classList.add('hidden');
+                imageUploadInput.value = '';
+                imageCaptionInput.value = '';
+            });
+        }
+
+        // Handle joining the chat
+        function handleJoinChat() {
+            const username = usernameInput.value.trim();
+            const secretCode = secretCodeInput.value.trim();
+            
+            if (!username) {
+                usernameError.textContent = "Username is required";
+                usernameError.classList.remove('hidden');
+                return;
+            }
+            
+            if (secretCode !== SECRET_CODE) {
+                codeError.textContent = "Incorrect secret code";
+                codeError.classList.remove('hidden');
+                return;
+            }
+            
+            // Check if username is already taken
+            if (users[username]) {
+                usernameError.textContent = "Username is already taken";
+                usernameError.classList.remove('hidden');
+                return;
+            }
+            
+            // Clear errors
+            usernameError.classList.add('hidden');
+            codeError.classList.add('hidden');
+            
+            // Initialize WebSocket connection
+            initializeWebSocket(username);
+        }
+
+        // Initialize WebSocket connection
+        function initializeWebSocket(username) {
+            // In a real app, this would connect to a WebSocket server
+            // For this demo, we'll simulate it with setTimeout
+            
+            currentUser = {
+                id: Date.now().toString(),
+                username: username,
+                online: true,
+                lastSeen: null
+            };
+            
+            // Store user in local users object
+            users[username] = currentUser;
+            
+            // Update UI
+            authScreen.classList.add('hidden');
+            chatContainer.classList.remove('hidden');
+            
+            // Add user to active users list
+            updateActiveUsersList();
+            
+            // Simulate other users joining (for demo purposes)
+            simulateOtherUsersJoining(username);
+            
+            // Focus message input
+            messageInput.focus();
+        }
+
+        // Simulate other users joining (demo only)
+        function simulateOtherUsersJoining(currentUsername) {
+            const demoUsers = [
+                "Alex",
+                "Sophia",
+                "Jamie",
+                "Taylor",
+                "Jordan",
+                "Morgan",
+                "Casey",
+                "Riley",
+                "Quinn",
+                "Peyton"
+            ];
+            
+            demoUsers
+                .filter(name => name !== currentUsername)
+                .slice(0, 9) // Keep total users at 10
+                .forEach(name => {
+                    if (!users[name]) {
+                        users[name] = {
+                            id: Date.now().toString(),
+                            username: name,
+                            online: Math.random() > 0.3, // 70% chance of being online
+                            lastSeen: new Date(Date.now() - Math.floor(Math.random() * 3600000)) // Random time in last hour
+                        };
+                        
+                        // Simulate receiving messages from these users
+                        setTimeout(() => {
+                            if (Math.random() > 0.5) { // 50% chance of sending a greeting
+                                receiveMessage({
+                                    id: Date.now().toString(),
+                                    sender: name,
+                                    text: `Hi ${currentUsername}! I just joined the chat.`,
+                                    timestamp: new Date(),
+                                    type: 'text'
+                                });
+                            }
+                        }, Math.random() * 5000); // Random delay up to 5 seconds
+                    }
+                });
+            
+            updateActiveUsersList();
+        }
+
+        // Update active users list UI
+        function updateActiveUsersList() {
+            activeUsersContainer.innerHTML = '';
+            
+            Object.values(users).forEach(user => {
+                const userEl = document.createElement('div');
+                userEl.className = `inline-flex items-center px-3 py-1 rounded-full text-sm font-medium shadow-sm ${user.online ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-700'}`;
+                
+                if (user.online) {
+                    userEl.innerHTML = `<span class="online-indicator"></span>${user.username}`;
+                } else {
+                    userEl.innerHTML = `${user.username} (offline)`;
+                }
+                
+                if (user.username === currentUser.username) {
+                    userEl.classList.add('border-2', 'border-blue-500');
+                }
+                
+                activeUsersContainer.appendChild(userEl);
+            });
+        }
+
+        // Handle leaving the chat
+        function handleLeaveChat() {
+            if (confirm('Are you sure you want to leave the chat?')) {
+                if (socket) {
+                    socket.close();
+                }
+                
+                // Clear chat data
+                chatMessages = [];
+                currentUser = null;
+                
+                // Reset UI
+                chatContainer.classList.add('hidden');
+                authScreen.classList.remove('hidden');
+                usernameInput.value = '';
+                secretCodeInput.value = '';
+                
+                // Focus username input
+                usernameInput.focus();
+            }
+        }
+
+        // Send a message
+        function sendMessage() {
+            const messageText = messageInput.value.trim();
+            const hasImage = imageUploadInput.files && imageUploadInput.files.length > 0;
+            
+            if (!messageText && !hasImage) return;
+            
+            if (hasImage) {
+                // For a real app, we would upload the image to a server
+                // Here we'll just simulate it with a placeholder
+                const caption = imageCaptionInput.value.trim() || "Shared an image";
+                const imageUrl = `https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/fa423344-4fe9-4663-8f1f-1a26acd506c0.png).toString().slice(-4)}`;
+                
+                const message = {
+                    id: Date.now().toString(),
+                    sender: currentUser.username,
+                    text: caption,
+                    imageUrl: imageUrl,
+                    timestamp: new Date(),
+                    type: 'image'
+                };
+                
+                // Add message to chat
+                addMessageToChat(message);
+                
+                // Clear image upload
+                imageUploadInput.value = '';
+                imageCaptionInput.value = '';
+                imageUploadContainer.classList.add('hidden');
+                
+                messageInput.focus();
+            } else {
+                const message = {
+                    id: Date.now().toString(),
+                    sender: currentUser.username,
+                    text: messageText,
+                    timestamp: new Date(),
+                    type: 'text'
+                };
+                
+                // Add message to chat
+                addMessageToChat(message);
+                
+                // Clear input
+                messageInput.value = '';
+                messageInput.focus();
+            }
+        }
+
+        // Add message to chat UI
+        function addMessageToChat(message) {
+            chatMessages.push(message);
+            renderMessage(message);
+            
+            // For a real app, we would send the message over WebSocket
+            // Here we'll simulate other users seeing it
+            setTimeout(() => {
+                if (Math.random() > 0.7) { // 30% chance of reply
+                    const replyUsers = Object.values(users)
+                        .filter(u => u.username !== message.sender && u.online);
+                    
+                    if (replyUsers.length > 0) {
+                        const replier = replyUsers[Math.floor(Math.random() * replyUsers.length)];
+                        
+                        let replyText;
+                        if (message.type === 'image') {
+                            const replies = [
+                                `Nice image, ${message.sender}!`,
+                                `Cool picture!`,
+                                `What a great shot!`
+                            ];
+                            replyText = replies[Math.floor(Math.random() * replies.length)];
+                        } else {
+                            const replies = [
+                                `Got it, ${message.sender}.`,
+                                `Thanks for sharing!`,
+                                `That's interesting!`,
+                                `I agree!`,
+                                `Let me think about that...`
+                            ];
+                            replyText = replies[Math.floor(Math.random() * replies.length)];
+                        }
+                        
+                        receiveMessage({
+                            id: Date.now().toString(),
+                            sender: replier.username,
+                            text: replyText,
+                            timestamp: new Date(),
+                            type: 'text'
+                        });
+                    }
+                }
+            }, 1000 + Math.random() * 4000); // 1-5 second delay
+        }
+
+        // Receive a message (simulated WebSocket)
+        function receiveMessage(message) {
+            chatMessages.push(message);
+            renderMessage(message);
+        }
+
+        // Render message in chat UI
+        function renderMessage(message) {
+            const messageEl = document.createElement('div');
+            messageEl.className = 'message';
+            
+            const isCurrentUser = message.sender === currentUser.username;
+            
+            if (message.type === 'image') {
+                messageEl.innerHTML = `
+                    <div class="flex ${isCurrentUser ? 'justify-end' : 'justify-start'}">
+                        <div class="max-w-md ${isCurrentUser ? 'bg-blue-100' : 'bg-white'} rounded-lg shadow p-3">
+                            <div class="font-medium ${isCurrentUser ? 'text-blue-800' : 'text-gray-800'} mb-1 flex items-center">
+                                ${isCurrentUser ? 'You' : message.sender}
+                                <span class="text-xs text-gray-500 ml-2">
+                                    ${formatTime(message.timestamp)}
+                                </span>
+                            </div>
+                            <div class="mb-1">
+                                <img src="${message.imageUrl}" alt="${message.text}" class="rounded w-full h-auto">
+                            </div>
+                            <p class="text-sm ${isCurrentUser ? 'text-blue-700' : 'text-gray-600'}">${message.text}</p>
+                        </div>
+                    </div>
+                `;
+            } else {
+                messageEl.innerHTML = `
+                    <div class="flex ${isCurrentUser ? 'justify-end' : 'justify-start'}">
+                        <div class="${isCurrentUser ? 'bg-blue-600 text-white' : 'bg-white text-gray-800'} rounded-2xl px-4 py-2 max-w-md shadow-md">
+                            <div class="font-medium mb-1">
+                                ${isCurrentUser ? 'You' : message.sender}
+                                <span class="text-xs ${isCurrentUser ? 'opacity-70' : 'text-gray-500'} ml-2">
+                                    ${formatTime(message.timestamp)}
+                                </span>
+                            </div>
+                            <p>${message.text}</p>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            chatMessagesContainer.appendChild(messageEl);
+            messageEl.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Handle image upload
+        function handleImageUpload(e) {
+            const file = e.target.files[0];
+            if (file) {
+                // Validate image type and size
+                const validTypes = ['image/jpeg', 'image/png'];
+                if (!validTypes.includes(file.type)) {
+                    alert('Please select a JPG or PNG image');
+                    return;
+                }
+                
+                if (file.size > 2 * 1024 * 1024) { // 2MB limit
+                    alert('Image size should be less than 2MB');
+                    return;
+                }
+                
+                // In a real app, we would upload the file here
+                // For demo purposes, we'll just enable the send button
+                
+                // Focus caption input
+                imageCaptionInput.focus();
+            }
+        }
+
+        // Format time as HH:MM
+        function formatTime(date) {
+            if (!(date instanceof Date)) {
+                date = new Date(date);
+            }
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
+        // Initialize the app when DOM is loaded
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
